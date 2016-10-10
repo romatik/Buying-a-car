@@ -4,7 +4,7 @@ library(rvest)
 # id_km -------------------------------------------------------------------
 #creating a dataset with the form manufacturer-id-minMileage-maxMileage-url, where url is a search url for mobile.de site.
 #url is also formatted to include relevant id, minMileage and maxMileage in it so that number of results per request is < 1000
-prod_pairings <- read_csv("Producer-makeId-pairings.csv")
+prod_pairings <- read_csv("./Data/supplements/Producer-makeId-pairings.csv")
 minMileage <- seq(0, 100000, by = 10000)
 maxMileage <- seq(10000, 110000, by = 10000)
 maxMileage[11] <- 200000
@@ -42,7 +42,7 @@ cars_id <- map_df(1:nrow(search_url_df), function(i){
 #cleaning up
 cars_id$id <- as.numeric(cars_id$id)
 cars_id <- cars_id %>% filter(!is.na(id)) %>% filter(!duplicated(id)) 
-write.csv(cars_id, "cars_id.csv", fileEncoding = "UTF-8", row.names = FALSE) #caching resulting dataset just in case
+write.csv(cars_id, "./Data/interim/cars_id.csv", fileEncoding = "UTF-8", row.names = FALSE) #caching resulting dataset just in case
 #there are ~23,000 cars in total for that search query, so 19,326 is a good sample 
 
 
@@ -105,6 +105,6 @@ extract_data <- function(i){
 }
 
 cars_df <- map_df(1:nrow(cars_id), possibly(extract_data, dummy_df)) #593 ads were removed from mobile.de
-saveRDS(cars_df, file = "first_pass.Rds") 
+saveRDS(cars_df, file = "./Data/interim/first_pass.Rds") 
 
 cars_id %>% group_by(car_maker) %>% tally()

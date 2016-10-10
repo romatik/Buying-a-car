@@ -18,8 +18,7 @@ url_base <- "http://suchen.mobile.de/fahrzeuge/search.html?zipcodeRadius=10&ambi
 id_km <- id_km %>% 
   group_by(id, minMileage, maxMileage) %>% 
   mutate(url = sprintf(url_base, "&userPosition=52.54503%2C13.44169", minMileage, maxMileage, id)) %>%
-  mutate(counter = read_html(url) %>% html_node(css = "span.hit-counter:nth-child(2)") %>% html_text() %>% as.numeric() %/% 20 + 1) %>%
-  mutate(url_page = paste0(url, "&pageNumber=", seq(1:counter, by = 1)))
+  mutate(counter = read_html(url) %>% html_node(css = "span.hit-counter:nth-child(2)") %>% html_text() %>% as.numeric() %/% 20 + 1) 
 
 
 # search_url_df -----------------------------------------------------------
@@ -27,14 +26,14 @@ id_km <- id_km %>%
 search_url_df <- map_df(1:nrow(id_km), function(i){
   data.frame(carmake = id_km$carmake[i], 
              url = id_km$url[i], 
-             search_url = paste0(id_km$url[i], "&pageNumber=", seq(from = 1, to = id_km$counter[i], by = 1)))
+             search_url = paste0(id_km$url[i], "&pageNumber=", seq(from = 1, to = id_km$counter[i], by = 1)),
+             stringsAsFactors = FALSE)
 })
 
 
 # Getting id's of cars ----------------------------------------------------
 cars_id <- map_df(1:nrow(search_url_df), function(i){
-  cat(".")
-  Sys.sleep(abs(rnorm(n = 1, mean = 1, sd = 1)))
+  cat(".") #handy tracker
   ids <- read_html(search_url_df$search_url[i]) %>% html_nodes(".parking-block") %>% xml_attr("data-parking") %>% as.integer()
   data.frame(id = ids[2:length(ids)], car_maker = search_url_df$carmake[i]) #ids start from 2 because 1 corresponds to an ad
 })

@@ -34,6 +34,8 @@ cars_df <- map_df(1:nrow(cars_id), possibly(extract_data, dummy_df))
 library(tidyverse)
 library(plotly)
 library(skimr)
+library(caret)
+library(ranger)
 
 df <- readRDS( "./Data/interim/after_cleaning.Rds") %>%
   tibble::as_tibble() %>%
@@ -160,7 +162,6 @@ predictors %>% dplyr::filter(term == "age") %>%
 
 ## Final model
 ```{r, message=FALSE}
-library(caret)
 set.seed(42)
 split <- caret::createDataPartition(df_mdl$price, p = 0.8, list = FALSE)
 train <- df_mdl[split,]

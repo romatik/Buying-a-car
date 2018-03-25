@@ -1,0 +1,200 @@
+---
+title: "Showcase"
+author: "Misha Balyasin"
+date: "March 27, 2018"
+output: 
+  ioslides_presentation:
+    smaller: true
+    widescreen: true
+
+---
+
+## Motivation
+- Way too many options
+- Don't really care about cars
+- Want to practice "Hadley" ways (praise be)
+
+## Source of data
+- ~19k ads from around Berlin from mobile.de
+- mobile.de has API if you are planning to get more data
+- Detailed steps are available here http://romatik.github.io/2016-10-10-buying_a_car_part1/
+
+## Couple of noteworthy things
+- Way too easy
+- Only takes 40 minutes to scrape
+- "Inspect" tool works just fine
+- Meat of the process is just
+```{r eval = FALSE}
+cars_df <- map_df(1:nrow(cars_id), possibly(extract_data, dummy_df))
+```
+- Most of the time spent finding element's ID
+
+## Couple of graphs
+```{r eval = TRUE, echo = FALSE, warning=FALSE, message=FALSE, fig.height=6}
+library(tidyverse)
+library(plotly)
+library(skimr)
+
+df <- readRDS( "./Data/interim/after_cleaning.Rds") %>%
+  tibble::as_tibble() %>%
+  dplyr::mutate(age = difftime(time1 = as.Date("2016-10-02"), fr, units = "days") %>% as.numeric)
+
+ggplot(data = df, aes(carmake, log(price))) + geom_boxplot() + coord_flip()
+
+```
+
+## Couple of graphs (2)
+```{r eval=TRUE, echo=FALSE}
+ggplot(data = df, aes(category1, log(price))) +
+  geom_boxplot() +
+  coord_flip() +
+  theme(axis.title.y = element_blank())
+
+```
+
+
+## Price as a function of age
+```{r echo=FALSE, eval = TRUE, message=FALSE, warning=FALSE}
+carmakers <- df %>% select(carmake) %>%
+  group_by(carmake) %>%
+  tally() %>%
+  filter(n > 100)
+p <- df %>%
+  filter(carmake %in% carmakers$carmake) %>%
+  filter(category1 == "Kleinwagen") %>%
+  ggplot(data = ., aes(age, price, color = carmake)) +
+    geom_point() +
+    geom_smooth(se=FALSE)
+ggplotly(p)
+
+```
+
+## Modeling
+
+Now that we see that there is a relationship between variables, next step is to model the relationship between multiple variables.
+
+Approach I'm taking here is an exploratory. My main motivation is not to build a perfect model, but to apply "split-apply-combine" strategy to see whether there are patterns worth exploring further. Since this is mostly a showcase, I'll be a little bit more careless while working with data, e.g., dropping columns that might have useful information, but would take too long to work with.
+
+## Cleaning (1/3)
+
+Dropping extra columns that are free text and/or can't be used in modeling directly.
+
+```{r, message=FALSE}
+df_mdl <- df %>%
+  dplyr::select(-id, -title, -envir, -category2, -hu, -extra, -fr) %>%
+  dplyr::mutate(co2_sticker = as.factor(co2_sticker)) %>%
+  dplyr::filter(complete.cases(.))
+carmakers <- df_mdl %>% 
+  dplyr::select(carmake) %>%
+  dplyr::group_by(carmake) %>%
+  dplyr::tally() %>%
+  dplyr::filter(n > 100)
+df_mdl <- df_mdl %>%
+  dplyr::filter(carmake %in% carmakers$carmake)
+```
+
+## Cleaning (2/3)
+```{r, results="asis", echo=FALSE}
+skimr::skim(df_mdl) %>% skimr::kable()
+```
+
+## Cleaning (3/3)
+`co2_sticker`, `seats` and `doors` have dominant values, so they are unlikely to have good predictive power. For that reason I drop them from analysis
+
+`fuel_` variables and `co2_em` have implicit missing variables that are coded as 999. I convert them to explicit `NA`'s
+
+```{r, results="asis"}
+df_mdl <- df_mdl %>%
+  dplyr::select(-co2_sticker, -doors, -fuel_type) %>%
+  dplyr::mutate_at(vars(starts_with("fuel_"), "co2_em"), ~dplyr::na_if(.x, 999)) %>%
+  dplyr::filter(!is.na(fuel_cons_comb))
+skimr::skim(df_mdl) %>% skimr::kable()
+```
+
+
+## Splitting into groups
+```{r}
+make_model <- function(df) {
+  lm(price ~ ., data = df)
+}
+nested <- df_mdl %>%
+  dplyr::group_by(carmake) %>%
+  tidyr::nest() %>%
+  dplyr::mutate(model = purrr::map(data, make_model))
+```
+
+## Models quality
+```{r, echo=FALSE}
+glance <- nested %>%
+  dplyr::mutate(glance = purrr::map(model, broom::glance)) %>%
+  tidyr::unnest(glance, .drop = TRUE)
+ggplot(glance, aes(x = adj.r.squared, y = df.residual)) +
+  geom_point()
+```
+
+
+## Visualizing residiuals
+```{r, echo = FALSE, message = FALSE}
+resids <- nested %>%
+  dplyr::mutate(preds = purrr::map2(data, model, modelr::add_predictions)) %>%
+  tidyr::unnest(preds) %>%
+  dplyr::mutate(resid = price-pred)
+ggplot(resids, aes(x = age, y = resid, color = carmake)) +
+  geom_line()
+```
+
+## Residuals per category
+```{r, echo =FALSE}
+p <- ggplot(resids, aes(x = age, y = resid, color = carmake)) +
+  geom_line() +
+  facet_wrap(~category1, scales = "free")
+ggplotly(p)
+```
+
+## Value of age
+```{r, echo = FALSE}
+predictors <- nested %>%
+  dplyr::mutate(tidies = purrr::map(model, broom::tidy)) %>%
+  tidyr::unnest(tidies)
+predictors %>% dplyr::filter(term == "age") %>%
+  dplyr::mutate_if(is.numeric, ~round(.x, digits = 2)) %>%
+  DT::datatable()
+```
+
+## Final model
+```{r, message=FALSE}
+library(caret)
+set.seed(42)
+split <- caret::createDataPartition(df_mdl$price, p = 0.8, list = FALSE)
+train <- df_mdl[split,]
+test <- df_mdl[-split,]
+mdl <- ranger::ranger(formula = price ~ ., data = train, importance = "impurity")
+mdl
+```
+
+## Test predictions
+```{r, echo = FALSE}
+pred <- predict(mdl, data = test)
+resids <- test %>%
+  dplyr::mutate(pred = pred$predictions) %>%
+  dplyr::mutate(resid = price - pred)
+ggplot(resids, aes(x = log(price), y = resid, color = carmake)) +
+  geom_line() +
+  facet_wrap(~carmake, ncol = 4, scales = "free")
+```
+
+
+## Variable importance
+```{r}
+mdl$variable.importance %>% 
+  enframe %>% 
+  dplyr::arrange(value) %>%
+  dplyr::mutate(value = value/max(value)) %>%
+  ggplot(., aes(x = reorder(name, value), y = value)) + 
+    geom_bar(stat = "identity") +
+    coord_flip()
+```
+
+## Conclusion
+
+Thanks for attention, I'd be glad to answer your questions!

@@ -178,7 +178,7 @@ resids <- test %>%
   dplyr::mutate(resid = price - pred)
 ggplot(resids, aes(x = log(price), y = resid, color = carmake)) +
   geom_line() +
-  facet_wrap(~carmake, ncol = 4, scales = "free")
+  facet_wrap(~carmake, ncol = 4, scales = "free_y")
 ```
 
 ## Variable importance

@@ -12,12 +12,12 @@ output:
 ## Motivation
 - Way too many options
 - Don't really care about cars
-- Want to practice "Hadley" ways (praise be)
+- Finding a car that will depreciate the least
 
 ## Source of data
 - ~19k ads from around Berlin from mobile.de
 - mobile.de has API if you are planning to get more data
-- Detailed steps are available here http://romatik.github.io/2016-10-10-buying_a_car_part1/
+- Detailed steps are available here https://www.mishabalyasin.com/2017/07/09/buy-car-part1/
 
 ## Couple of noteworthy things
 - Way too easy
@@ -75,7 +75,9 @@ Now that we see that there is a relationship between variables, next step is to 
 
 Approach I'm taking here is an exploratory. My main motivation is not to build a perfect model, but to apply "split-apply-combine" strategy to see whether there are patterns worth exploring further. Since this is mostly a showcase, I'll be a little bit more careless while working with data, e.g., dropping columns that might have useful information, but would take too long to work with.
 
-## Cleaning (1/3)
+I'll also start with building models for each of the carmake individually to see whether predicting price makes sense. 
+
+## Cleaning (1/2)
 
 Dropping extra columns that are free text and/or can't be used in modeling directly.
 
@@ -93,24 +95,19 @@ df_mdl <- df_mdl %>%
   dplyr::filter(carmake %in% carmakers$carmake)
 ```
 
-## Cleaning (2/3)
-```{r, results="asis", echo=FALSE}
-skimr::skim(df_mdl) %>% skimr::kable()
-```
-
-## Cleaning (3/3)
-`co2_sticker`, `seats` and `doors` have dominant values, so they are unlikely to have good predictive power. For that reason I drop them from analysis
+## Cleaning (2/2)
+Using `skimr::skim`, I've found that `co2_sticker`, `seats` and `doors` have dominant values, so they are unlikely to have good predictive power. For that reason I drop them from analysis
 
 `fuel_` variables and `co2_em` have implicit missing variables that are coded as 999. I convert them to explicit `NA`'s
 
-```{r, results="asis"}
+```{r}
+#skimr::skim(df_mdl)
 df_mdl <- df_mdl %>%
   dplyr::select(-co2_sticker, -doors, -fuel_type) %>%
   dplyr::mutate_at(vars(starts_with("fuel_"), "co2_em"), ~dplyr::na_if(.x, 999)) %>%
   dplyr::filter(!is.na(fuel_cons_comb))
-skimr::skim(df_mdl) %>% skimr::kable()
+#skimr::skim(df_mdl)
 ```
-
 
 ## Splitting into groups
 ```{r}
@@ -144,7 +141,7 @@ ggplot(resids, aes(x = age, y = resid, color = carmake)) +
 ```
 
 ## Residuals per category
-```{r, echo =FALSE}
+```{r, echo =FALSE, message = FALSE}
 p <- ggplot(resids, aes(x = age, y = resid, color = carmake)) +
   geom_line() +
   facet_wrap(~category1, scales = "free")
@@ -173,7 +170,7 @@ mdl
 ```
 
 ## Test predictions
-```{r, echo = FALSE}
+```{r, echo = FALSE, fig.width = 10, fig.height=6}
 pred <- predict(mdl, data = test)
 resids <- test %>%
   dplyr::mutate(pred = pred$predictions) %>%
@@ -183,9 +180,8 @@ ggplot(resids, aes(x = log(price), y = resid, color = carmake)) +
   facet_wrap(~carmake, ncol = 4, scales = "free")
 ```
 
-
 ## Variable importance
-```{r}
+```{r, echo = FALSE}
 mdl$variable.importance %>% 
   enframe %>% 
   dplyr::arrange(value) %>%
@@ -196,5 +192,7 @@ mdl$variable.importance %>%
 ```
 
 ## Conclusion
+
+In the end we've decided not to buy car after all, but current analysis showed some interesting things that I haven't considered before
 
 Thanks for attention, I'd be glad to answer your questions!

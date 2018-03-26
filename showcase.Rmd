@@ -9,10 +9,11 @@ output:
 
 ---
 
-## Motivation
+## Setting expectations
 - Way too many options
 - Don't really care about cars
 - Finding a car that will depreciate the least
+- Quick analysis to answer that question
 
 ## Source of data
 - ~19k ads from around Berlin from mobile.de
@@ -29,7 +30,7 @@ cars_df <- map_df(1:nrow(cars_id), possibly(extract_data, dummy_df))
 ```
 - Most of the time spent finding element's ID
 
-## Couple of graphs
+## Couple of graphs (1/2)
 ```{r eval = TRUE, echo = FALSE, warning=FALSE, message=FALSE, fig.height=6}
 library(tidyverse)
 library(plotly)
@@ -45,7 +46,7 @@ ggplot(data = df, aes(carmake, log(price))) + geom_boxplot() + coord_flip()
 
 ```
 
-## Couple of graphs (2)
+## Couple of graphs (2/2)
 ```{r eval=TRUE, echo=FALSE}
 ggplot(data = df, aes(category1, log(price))) +
   geom_boxplot() +
@@ -77,7 +78,7 @@ Now that we see that there is a relationship between variables, next step is to 
 
 Approach I'm taking here is an exploratory. My main motivation is not to build a perfect model, but to apply "split-apply-combine" strategy to see whether there are patterns worth exploring further. Since this is mostly a showcase, I'll be a little bit more careless while working with data, e.g., dropping columns that might have useful information, but would take too long to work with.
 
-I'll also start with building models for each of the carmake individually to see whether predicting price makes sense. 
+I'll also start with building models for each of the carmake individually to see patterns for each carmake. 
 
 ## Cleaning (1/2)
 
@@ -98,7 +99,7 @@ df_mdl <- df_mdl %>%
 ```
 
 ## Cleaning (2/2)
-Using `skimr::skim`, I've found that `co2_sticker`, `seats` and `doors` have dominant values, so they are unlikely to have good predictive power. For that reason I drop them from analysis
+Using `skimr::skim`, I've found that `co2_sticker`, `seats` and `doors` have dominant values, so they are unlikely to have good predictive power. For that reason I drop them from analysis.
 
 `fuel_` variables and `co2_em` have implicit missing variables that are coded as 999. I convert them to explicit `NA`'s
 
@@ -111,7 +112,7 @@ df_mdl <- df_mdl %>%
 #skimr::skim(df_mdl)
 ```
 
-## Splitting into groups
+## Splitting into groups and modelling
 ```{r}
 make_model <- function(df) {
   lm(price ~ ., data = df)
@@ -192,8 +193,16 @@ mdl$variable.importance %>%
     coord_flip()
 ```
 
+## Limitations / Future work
+- More data is needed
+- Makes sense to concentrate on specific type(s)/carmake(s)
+- Linear regression underfits, perhaps better to use quantile regression
+- Treating data more accurately (especially when dealing with missing data)
+- Should check assumptions of models more carefully (e.g., multicollinearity, outliers)
+- Try different approach with clustering carmakes to eliminate premium cars and compare apples to apples
+
 ## Conclusion
 
-In the end we've decided not to buy car after all, but current analysis showed some interesting things that I haven't considered before
+In the end we've decided not to buy car after all, but current analysis showed some interesting things that I haven't considered before.
 
 Thanks for attention, I'd be glad to answer your questions!
